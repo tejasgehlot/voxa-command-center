@@ -1,7 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Camera, Cpu, CheckCircle2, MapPin, Navigation, Languages, Eye } from "lucide-react";
 import { PublicNav } from "@/components/voxa/PublicNav";
-import { VoxaMap } from "@/components/voxa/VoxaMap";
 import { complaints } from "@/lib/voxa-data";
 
 export const Route = createFileRoute("/")({
@@ -23,9 +22,15 @@ function Landing() {
 
       {/* HERO */}
       <section className="relative overflow-hidden">
-        <div className="absolute inset-0 opacity-40">
-          <VoxaMap complaints={complaints.slice(0, 20)} height="100%" />
-        </div>
+        <video
+          className="absolute inset-0 h-full w-full object-cover opacity-40"
+          src="/videos/sample-video-maps.mp4"
+          autoPlay
+          loop
+          muted
+          playsInline
+          aria-hidden="true"
+        />
         <div className="absolute inset-0 bg-gradient-to-r from-background via-background/80 to-transparent pointer-events-none" />
         <div className="relative max-w-[1400px] mx-auto px-6 py-24 md:py-32 grid md:grid-cols-2 gap-12 items-center">
           <div className="space-y-6 fade-in-up">
