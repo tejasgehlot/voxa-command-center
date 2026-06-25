@@ -8,17 +8,20 @@ import {
   Database,
   FileSearch,
   Gauge,
-  MapPin,
   MessageCircle,
   Search,
   ShieldCheck,
   Sparkles,
   ThumbsUp,
   UserRound,
+  AlertCircle,
 } from "lucide-react";
 import { PublicNav } from "@/components/voxa/PublicNav";
-import { complaints, sevBg } from "@/lib/voxa-data";
+import { sevBg } from "@/lib/voxa-data";
 import type { Complaint, Status } from "@/lib/voxa-data";
+import type { ComplaintDetail, TimelineEntry } from "@/lib/types";
+import { trackComplaint } from "@/lib/apiService";
+import { trackedDetailToComplaint } from "@/lib/adapters";
 
 export const Route = createFileRoute("/track")({
   head: () => ({
@@ -105,30 +108,60 @@ const toneStyles = {
   },
 };
 
+interface TrackedComplaint {
+  complaint: Complaint;
+  timeline: TimelineEntry[];
+}
+
 function Track() {
-  const [query, setQuery] = useState("");
+  const [phone, setPhone] = useState("");
+  const [trackingId, setTrackingId] = useState("");
   const [searched, setSearched] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   const [searchRun, setSearchRun] = useState(0);
+  const [results, setResults] = useState<TrackedComplaint[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
-  const results = useMemo(() => (searched ? complaints.slice(0, 4) : []), [searched]);
-
-  useEffect(() => {
-    if (!isLocating) return;
-
-    const timer = window.setTimeout(() => {
-      setIsLocating(false);
-      setSearched(true);
-    }, 2600);
-
-    return () => window.clearTimeout(timer);
-  }, [isLocating, searchRun]);
-
-  function handleSearch(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSearch(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setError(null);
+
+    if (!/^[6-9]\d{9}$/.test(phone)) {
+      setError("Enter a valid 10-digit mobile number.");
+      return;
+    }
+
     setSearched(false);
     setIsLocating(true);
-    setSearchRun((currentRun) => currentRun + 1);
+    setSearchRun((r) => r + 1);
+
+    try {
+      const details: ComplaintDetail[] = await trackComplaint(
+        phone,
+        trackingId.trim() || undefined
+      );
+
+      // Hold the locating animation for its full choreography (2.6s) for the visual effect,
+      // even though the real API call usually returns much faster.
+      await new Promise((res) => setTimeout(res, 2600));
+
+      setResults(
+        details.map((d) => ({
+          complaint: trackedDetailToComplaint(d),
+          timeline:  d.timeline,
+        }))
+      );
+      setIsLocating(false);
+      setSearched(true);
+    } catch (err: unknown) {
+      await new Promise((res) => setTimeout(res, 1200));
+      setIsLocating(false);
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      setError(
+        axiosErr?.response?.data?.message ||
+        "No complaints found for this phone number."
+      );
+    }
   }
 
   return (
@@ -149,20 +182,35 @@ function Track() {
             </div>
             <h1 className="text-3xl font-display font-bold md:text-5xl">COMPLAINT TRACKING</h1>
             <p className="mx-auto mt-4 max-w-2xl text-sm leading-6 text-muted-foreground md:text-base">
-              Enter a tracking ID or mobile number and VOXA will locate the complaint record, verify
-              the match, and assemble the timeline.
+              Enter your mobile number (and optionally a tracking ID to narrow results) and VOXA
+              will locate the complaint record, verify the match, and assemble the timeline.
             </p>
+
+            {error && (
+              <div className="mx-auto mt-5 flex max-w-3xl items-center gap-2 rounded-md border border-critical/40 bg-critical/10 px-4 py-2.5 text-left">
+                <AlertCircle className="h-4 w-4 text-critical shrink-0" />
+                <span className="text-sm text-critical">{error}</span>
+              </div>
+            )}
 
             <form
               onSubmit={handleSearch}
               className="mx-auto mt-8 flex max-w-3xl flex-col gap-3 rounded-lg border border-cyan-300/35 bg-background/70 p-2 shadow-[0_0_40px_rgba(34,211,238,0.12)] backdrop-blur-xl sm:flex-row"
             >
               <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Tracking ID or Mobile Number (e.g., VOXA-2025-1524)"
-                aria-label="Tracking ID or mobile number"
+                value={phone}
+                onChange={(event) => setPhone(event.target.value.replace(/\D/g, "").slice(0, 10))}
+                placeholder="10-digit mobile number"
+                aria-label="Mobile number"
                 className="min-w-0 flex-1 bg-transparent px-4 py-3 font-mono text-sm outline-none placeholder:text-muted-foreground/70"
+                maxLength={10}
+              />
+              <input
+                value={trackingId}
+                onChange={(event) => setTrackingId(event.target.value.toUpperCase())}
+                placeholder="Tracking ID (optional, e.g. VXA-P05)"
+                aria-label="Tracking ID"
+                className="min-w-0 flex-1 bg-transparent px-4 py-3 font-mono text-sm outline-none placeholder:text-muted-foreground/70 border-t border-cyan-300/20 sm:border-t-0 sm:border-l"
               />
               <button
                 type="submit"
@@ -180,9 +228,9 @@ function Track() {
         </section>
 
         <AnimatePresence mode="wait">
-          {isLocating && <LocatingSequence key={`locating-${searchRun}`} query={query} />}
-          {!isLocating && results.length > 0 && (
-            <ResultsReveal key={`results-${searchRun}`} results={results} query={query} />
+          {isLocating && <LocatingSequence key={`locating-${searchRun}`} query={phone} />}
+          {!isLocating && searched && results.length > 0 && (
+            <ResultsReveal key={`results-${searchRun}`} results={results} query={phone} />
           )}
         </AnimatePresence>
       </main>
@@ -276,7 +324,7 @@ function LocatingSequence({ query }: { query: string }) {
   );
 }
 
-function ResultsReveal({ results, query }: { results: Complaint[]; query: string }) {
+function ResultsReveal({ results, query }: { results: TrackedComplaint[]; query: string }) {
   return (
     <motion.section
       initial={{ opacity: 0 }}
@@ -291,7 +339,7 @@ function ResultsReveal({ results, query }: { results: Complaint[]; query: string
             COMPLAINT LOCATED
           </div>
           <h2 className="mt-2 text-2xl font-display font-bold md:text-3xl">
-            {results.length} matched complaint records
+            {results.length} matched complaint record{results.length !== 1 ? "s" : ""}
           </h2>
         </div>
         <div className="rounded-md border border-cyan-300/25 bg-white/[0.04] px-4 py-3 font-mono text-xs text-muted-foreground">
@@ -300,10 +348,11 @@ function ResultsReveal({ results, query }: { results: Complaint[]; query: string
       </div>
 
       <div className="space-y-10">
-        {results.map((complaint, complaintIndex) => (
+        {results.map((result, complaintIndex) => (
           <ComplaintReveal
-            key={complaint.id}
-            complaint={complaint}
+            key={result.complaint.id}
+            complaint={result.complaint}
+            timeline={result.timeline}
             complaintIndex={complaintIndex}
           />
         ))}
@@ -314,15 +363,17 @@ function ResultsReveal({ results, query }: { results: Complaint[]; query: string
 
 function ComplaintReveal({
   complaint,
+  timeline,
   complaintIndex,
 }: {
   complaint: Complaint;
+  timeline: TimelineEntry[];
   complaintIndex: number;
 }) {
   const currentStatusIndex = statusPosition[complaint.status];
   const progress = (currentStatusIndex / (statusStages.length - 1)) * 100;
   const baseDelay = complaintIndex * 0.42;
-  const timeline = getTimeline(complaint, currentStatusIndex);
+  const realTimeline = formatRealTimeline(timeline);
 
   return (
     <article className="relative">
@@ -360,19 +411,23 @@ function ComplaintReveal({
         <PremiumCard
           tone="purple"
           icon={UserRound}
-          eyebrow="Citizen Information"
-          title={complaint.citizen}
+          eyebrow="Photo Evidence"
+          title="Submitted Photo"
           delay={baseDelay + 0.14}
           className="lg:col-span-4"
         >
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-            <DataPoint label="Citizen Name" value={complaint.citizen} />
-            <DataPoint label="Mobile Number" value={complaint.phone} />
-          </div>
-          <div className="mt-4 inline-flex items-center gap-2 rounded-md border border-violet-300/25 bg-violet-300/10 px-3 py-2 text-xs font-semibold text-violet-100">
-            <ShieldCheck className="h-4 w-4" />
-            Verification Badge
-          </div>
+          {complaint.photo ? (
+            <img
+              src={complaint.photo}
+              alt="Complaint evidence"
+              className="mt-4 h-32 w-full rounded-md object-cover border border-violet-300/20"
+            />
+          ) : (
+            <div className="mt-4 inline-flex items-center gap-2 rounded-md border border-violet-300/25 bg-violet-300/10 px-3 py-2 text-xs font-semibold text-violet-100">
+              <ShieldCheck className="h-4 w-4" />
+              No photo available
+            </div>
+          )}
         </PremiumCard>
 
         <PremiumCard
@@ -390,8 +445,8 @@ function ComplaintReveal({
               label="Priority Level"
               value={`${complaint.severity.toUpperCase()} - ${complaint.severityScore}`}
             />
-            <DataPoint label="Location" value={complaint.ward} />
-            <DataPoint label="Department" value={complaint.department} />
+            <DataPoint label="Location" value={complaint.ward || "—"} />
+            <DataPoint label="Department" value={complaint.department || "—"} />
           </div>
           <div className="mt-4 flex flex-wrap gap-3 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1">
@@ -470,9 +525,9 @@ function ComplaintReveal({
               transition={{ delay: baseDelay + 0.82, duration: 0.85, ease: "easeOut" }}
             />
             <div className="space-y-5">
-              {timeline.map((entry, timelineIndex) => (
+              {realTimeline.map((entry, timelineIndex) => (
                 <motion.div
-                  key={entry.label}
+                  key={`${entry.label}-${timelineIndex}`}
                   initial={{ opacity: 0, x: -14 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: baseDelay + 0.9 + timelineIndex * 0.14, duration: 0.35 }}
@@ -573,39 +628,33 @@ function DataPoint({ label, value }: { label: string; value: string | number }) 
   );
 }
 
-function getTimeline(complaint: Complaint, currentStatusIndex: number) {
-  const hasAssignment = currentStatusIndex >= 1;
-  const hasOfficerUpdate = currentStatusIndex >= 2;
-  const isResolved = complaint.status === "resolved";
+// ── Convert real backend TimelineEntry[] into display rows ──────
+function formatRealTimeline(timeline: TimelineEntry[]) {
+  const stageLabels: Record<string, string> = {
+    SUBMITTED:    "Submission Time",
+    AI_ANALYSED:  "AI Analysis",
+    ASSIGNED:     "Assignment Time",
+    IN_PROGRESS:  "Officer Update",
+    RESOLVED:     "Resolution Time",
+  };
 
-  return [
-    {
-      label: "Submission Time",
-      value: complaint.timeAgo,
-      detail: `Complaint received from ${complaint.citizen} and registered under ${complaint.id}.`,
-    },
-    {
-      label: "Assignment Time",
-      value: hasAssignment ? "Assignment confirmed" : "Pending assignment",
-      detail: hasAssignment
-        ? `${complaint.ward} ${complaint.department} desk accepted the case.`
-        : "The complaint is waiting for officer queue confirmation.",
-    },
-    {
-      label: "Officer Update",
-      value: hasOfficerUpdate ? "Work order active" : "Awaiting update",
-      detail: hasOfficerUpdate
-        ? `${complaint.department} officer update is linked to the complaint.`
-        : "Officer notes appear here after assignment begins.",
-    },
-    {
-      label: "Resolution Time",
-      value: isResolved ? "Resolved" : "Pending resolution",
-      detail: isResolved
-        ? "Final verification has been marked complete."
-        : "Resolution timestamp appears after closure.",
-    },
-  ];
+  if (timeline.length === 0) {
+    return [
+      { label: "Submission Time", value: "—", detail: "No timeline events yet." },
+    ];
+  }
+
+  return timeline.map((entry) => ({
+    label: stageLabels[entry.stage] || entry.stage,
+    value: new Date(entry.at).toLocaleString("en-IN", {
+      day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
+    }),
+    detail: entry.note
+      ? entry.note
+      : entry.actor
+        ? `Updated by ${entry.actor}.`
+        : "Automatically recorded by the system.",
+  }));
 }
 
 function formatStatus(status: string) {
