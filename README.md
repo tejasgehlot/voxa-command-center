@@ -518,7 +518,7 @@ Please open an issue first for major changes.
 
 <div align="center">
 
-Built with obsession in **Vadodara, Gujarat 🇮🇳**
+Engineered by **Tejas, Pramod, Mukt**
 
 *Every pothole reported is a problem solved.*
 *Every complaint tracked is a citizen heard.*
@@ -541,6 +541,6 @@ Built with obsession in **Vadodara, Gujarat 🇮🇳**
 
 <div align="center">
 <sub>
-VOXA · Vadodara Municipal Corporation · Built with React, Spring Boot, Gemini AI, and a lot of chai ☕
+VOXA · Built with React, Spring Boot, Gemini AI, and a lot of chai ☕
 </sub>
 </div>
