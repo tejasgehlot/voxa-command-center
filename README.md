@@ -29,7 +29,7 @@
 
 <br />
 
-![VOXA Hero Screenshot](./docs/screenshots/hero.png)
+![VOXA Hero Screenshot](assets/hero.png)
 
 </div>
 
@@ -51,7 +51,7 @@ No forms. No phone calls. No waiting in queues.
 
 | Public Citizen Flow | Officer Dashboard | Admin God View |
 |---|---|---|
-| ![Report Flow](./docs/screenshots/report.gif) | ![Officer](./docs/screenshots/officer.png) | ![Admin](./docs/screenshots/admin.png) |
+| ![Report Flow](assets/reportflow.webp) | ![Officer](assets/officer%20dashboard.png) | ![Admin](assets/admin%20dashboard.png) |
 
 <br />
 
