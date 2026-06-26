@@ -51,7 +51,7 @@ No forms. No phone calls. No waiting in queues.
 
 | Public Citizen Flow | Officer Dashboard | Admin God View |
 |---|---|---|
-| ![Report Flow](./docs/screenshots/report.gif) | ![Officer](assets/officer%20dashboard.png) | ![Admin](assets/admin%20dashboard.png) |
+| ![Report Flow](assets/reportflow.webp) | ![Officer](assets/officer%20dashboard.png) | ![Admin](assets/admin%20dashboard.png) |
 
 <br />
 
